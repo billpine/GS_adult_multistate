@@ -24,7 +24,8 @@
 ##   9. Uses the final terminal-p-constrained candidate set in
 ##      results/models/seven_river/.
 ##  10. Integrates Table A6 from the river x year / river-detection diagnostic
-##      model used for the Hurricane Michael sensitivity result.
+##      model used for the Hurricane Michael event-specific diagnostic, using
+##      likelihood-profile confidence intervals from mod7_prof.RDS.
 ################################################################################
 
 # ---- project setup -----------------------------------------------------------
@@ -184,8 +185,17 @@ all_mods <- lapply(seq_len(25), function(i) {
 
 names(all_mods) <- paste0("mod", seq_len(25))
 
-# Profile-CI version of the final top model.
+# Profile-CI versions used for manuscript uncertainty intervals.
 mod1_prof <- readRDS(file.path(results_dir, "mod1_prof.RDS"))
+
+mod7_prof_path <- file.path(results_dir, "mod7_prof.RDS")
+if (!file.exists(mod7_prof_path)) {
+  stop(
+    "Missing profile-CI diagnostic model: ", mod7_prof_path,
+    "\nRun the mod7 profiling step in Script 2 before Script 7."
+  )
+}
+mod7_prof <- readRDS(mod7_prof_path)
 
 # Separate four-region state-space movement model. This model has a different
 # state space / likelihood and was independently reconstructed and validated
@@ -231,6 +241,27 @@ if ((!is.null(top_mod$results$singular) &&
   stop(
     "Final top model or mod1_prof reports singular parameter indices. ",
     "Inspect Script 2 before generating manuscript tables."
+  )
+}
+
+# The profile-CI version of mod7 must reproduce the candidate-model likelihood
+# and AICc. Profiling changes interval construction, not model selection.
+mod7_candidate <- all_mods[["mod7"]]
+
+if (abs(mod7_prof$results$AICc - mod7_candidate$results$AICc) > 0.01 ||
+    abs(mod7_prof$results$lnl  - mod7_candidate$results$lnl)  > 0.01) {
+  stop(
+    "mod7_prof does not match candidate mod7 likelihood/AICc. ",
+    "Re-run or reconcile the mod7 profiling step before generating Table A6."
+  )
+}
+
+if (!is.null(mod7_prof$results$singular) &&
+    length(mod7_prof$results$singular) > 0) {
+  warning(
+    "mod7_prof reports singular parameter index/indices: ",
+    paste(mod7_prof$results$singular, collapse = ", "),
+    ". Inspect before publication."
   )
 }
 
@@ -1077,11 +1108,13 @@ message("  NOTE: regional-model AICc is recorded only; do NOT compare it with Ta
 # competitive model in the final candidate set and should not be used as the
 # primary basis for annual river-specific inference.
 
-message("Building Table A6: river x year survival from mod7 diagnostic model...")
+message("Building Table A6: river x year survival from mod7 diagnostic model with profile CIs...")
 
-mod7 <- all_mods[["mod7"]]
+# Keep ordinary candidate mod7 for model-selection quantities, but use the
+# profile-CI refit for real-parameter uncertainty intervals in Table A6.
+mod7 <- mod7_candidate
 
-s_mod7 <- get_real(mod7, "S") %>%
+s_mod7 <- get_real(mod7_prof, "S") %>%
   parse_stratum_time(
     parameter = "S",
     state_map = river_map,
@@ -1104,6 +1137,21 @@ if (nrow(s_mod7) != 84 ||
     "Unexpected mod7 S dimensions. Expected 84 rows = 7 rivers x 12 years."
   )
 }
+
+# Audit upper-boundary estimates. Profile intervals may be informative even
+# when the maximum-likelihood estimate is exactly 1.0.
+n_boundary_mod7 <- sum(s_mod7$Estimate >= 0.999, na.rm = TRUE)
+n_boundary_profile_informative <- sum(
+  s_mod7$Estimate >= 0.999 & s_mod7$LCL_95 < 0.999,
+  na.rm = TRUE
+)
+
+message(
+  "  mod7 profile-CI boundary audit: ",
+  n_boundary_mod7, " estimates >= 0.999; ",
+  n_boundary_profile_informative,
+  " have profile LCL < 0.999."
+)
 
 tableA6 <- s_mod7 %>%
   mutate(
@@ -1132,7 +1180,7 @@ if (nrow(a6_apal_2018) == 1) {
   message(
     "  Apalachicola 2018 diagnostic S = ",
     sprintf("%.3f", a6_apal_2018$Estimate),
-    " (95% CI ",
+    " (95% profile CI ",
     sprintf("%.3f", a6_apal_2018$LCL_95),
     "-",
     sprintf("%.3f", a6_apal_2018$UCL_95),
@@ -1232,7 +1280,10 @@ message("Top-model p reporting rows after terminal expansion: ",
         nrow(p_top), " (expected 84)")
 message("Alternative mod3 river S rows: ", nrow(s_river), " (expected 84)")
 message("Top regional S rows: ", nrow(s_region_top), " (expected 48)")
-message("Diagnostic mod7 river S rows: ", nrow(s_mod7), " (expected 84)")
+message("Diagnostic mod7 profile S rows: ", nrow(s_mod7), " (expected 84)")
+message("Diagnostic mod7 boundary estimates >= 0.999: ", n_boundary_mod7)
+message("Diagnostic mod7 boundary rows with profile LCL < 0.999: ",
+        n_boundary_profile_informative)
 message("Table 1 deployments/fish: ", nrow(tags_for_analysis), " / ",
         n_distinct(tags_for_analysis$FishID), " (expected 1015 / 985)")
 message("Table A1 relevant tags/fish: ", nrow(tags_A1), " / ",
