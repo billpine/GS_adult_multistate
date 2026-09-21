@@ -24,7 +24,7 @@ MS_TR_1350mmTL_allATc1_MAX_ANNUAL_2010-2022_7basin_20240121.inp
 admin_query_export_All_Fish_All_ATags_By_Mark_Status_Min_Date_20240121.csv
 The .inp file is the archived annual encounter-history input and already reflects the upstream no-singles filtering and annual encounter-state construction. The CSV contains acoustic-tag deployment/longevity information used to apply transmitter-life censoring.
 
-Because of the ESA listing status of Gulf Sturgeon, data requests must be filed with NOAA Fisheries by contacting Nick Farmer (nick.farmer@noaa.gov)
+Because of the ESA listing status of Gulf Sturgeon and absence of data sharing agreements, data requests must be filed with NOAA Fisheries by contacting Nick Farmer (nick.farmer@noaa.gov)
 
 Software requirements
 R
