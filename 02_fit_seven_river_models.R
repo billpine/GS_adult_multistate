@@ -20,7 +20,8 @@
 #   terminal survival-detection confounding while leaving nonterminal
 #   survival estimates essentially unchanged in the validation comparison.
 #
-#   A profile-CI version of the top model (mod1) is fit/loaded at the end.
+#   Profile-CI versions of the top model (mod1) and the event-diagnostic
+#   river-by-year model (mod7) are fit/loaded at the end.
 #
 # Important accounting
 #   - Script 1 contains 1,070 adult encounter-history rows.
@@ -1153,6 +1154,49 @@ if (!is.null(mod1_prof$results$singular) &&
   )
 }
 
+# ---- 11. Profile CIs for the event-specific mod7 diagnostic ------------------
+
+message("\n11. Loading/fitting profile-CI version of mod7 event diagnostic...")
+
+mod7_prof <- fit_or_load(
+  "mod7_prof.RDS",
+  mark(
+    pd, dd,
+    model = "Multistrata",
+    silent = TRUE,
+    output = FALSE,
+    profile.int = TRUE,
+    model.parameters = list(
+      S = list(formula = ~ -1 + stratum:time, link = "sin"),
+      p = list(formula = ~ stratum),
+      Psi = Psi.strattostrat
+    ),
+    model.name = "prof_S(river:time)p(river)Psi(strattostrat)"
+  )
+)
+
+mod7_prof_aicc_diff <- abs(mod7$results$AICc - mod7_prof$results$AICc)
+mod7_prof_lnl_diff  <- abs(mod7$results$lnl  - mod7_prof$results$lnl)
+
+message(
+  "  mod7 profile audit: |AICc diff| = ",
+  format(mod7_prof_aicc_diff, scientific = TRUE),
+  "; |NLL diff| = ",
+  format(mod7_prof_lnl_diff, scientific = TRUE)
+)
+
+if (mod7_prof_aicc_diff > 0.01 || mod7_prof_lnl_diff > 0.01) {
+  warning("mod7_prof does not closely match candidate mod7.")
+}
+
+if (!is.null(mod7_prof$results$singular) &&
+    length(mod7_prof$results$singular) > 0) {
+  warning(
+    "mod7_prof has singular parameter index/indices: ",
+    paste(mod7_prof$results$singular, collapse = ", ")
+  )
+}
+
 # ---- final audit -------------------------------------------------------------
 
 message("\n================ SCRIPT 2 FINAL AUDIT ================")
@@ -1171,7 +1215,7 @@ message("Top AICc: ", sprintf("%.3f", top3$AICc_unrounded[1]))
 message("Top 3 weights: ",
         paste(sprintf("%.6f", top3$Weight_unrounded), collapse = ", "))
 message("Candidate singular flags: ", sum(singular_flag))
-message("Profile CI object available: mod1_prof")
+message("Profile CI objects available: mod1_prof, mod7_prof")
 message("Model audit CSV: ",
         file.path(results_dir, "Script2_candidate_model_audit.csv"))
 message("======================================================")
